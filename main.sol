@@ -154,3 +154,55 @@ contract Atunga {
 
     struct Round {
         uint64 commitEndsAt;
+        uint64 revealEndsAt;
+        uint256 minDepositWei;
+        uint16 winOddsBps;
+        uint16 feeBps;
+        uint32 maxEntries;
+        bytes32 roundSalt;
+
+        bool started;
+        bool finalized;
+
+        uint32 entryCount;
+        uint256 totalPotWei;
+
+        // Winner is the best candidate (lowest roll) discovered during reveal.
+        address bestWinner;
+        uint16 bestRollBps;
+
+        address winner;
+        uint256 prizeWei;
+        uint256 feeWei;
+        bool winnerClaimed;
+    }
+
+    mapping(uint256 => Round) private _rounds;
+    uint256 public currentRoundId;
+
+    mapping(uint256 => mapping(address => Ticket)) private _tickets;
+
+    // Round player lists (useful for UI paging; cancelled entries are filtered out).
+    mapping(uint256 => address[]) private _roundPlayers;
+    mapping(uint256 => mapping(address => bool)) private _roundPlayerActive;
+
+    // Accumulated treasury fees across finalized rounds.
+    uint256 private _treasuryFeesWei;
+
+    // -------------------------------------------------------------------------
+    // Modifiers
+    // -------------------------------------------------------------------------
+    modifier onlyBoss() {
+        if (msg.sender != ATG_BOSS) revert ATG_NotBoss();
+        _;
+    }
+
+    modifier onlyNenek() {
+        if (msg.sender != ATG_NENEK) revert ATG_NotNenek();
+        _;
+    }
+
+    modifier onlyTreasury() {
+        if (msg.sender != ATG_TREASURY) revert ATG_NotTreasury();
+        _;
+    }
