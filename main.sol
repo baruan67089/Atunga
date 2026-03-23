@@ -50,3 +50,55 @@ contract Atunga {
     error ATG_NotTreasury();
     error ATG_Paused();
     error ATG_ReentrancyLocked();
+    error ATG_AlreadyStarted();
+    error ATG_InvalidSeedHash();
+    error ATG_InvalidDeposit();
+    error ATG_CommitWindowClosed();
+    error ATG_RevealWindowClosed();
+    error ATG_CommitAlreadyClosed();
+    error ATG_CancelNotAllowed();
+    error ATG_AlreadyCommitted();
+    error ATG_CommitNotFound();
+    error ATG_AlreadyRevealed();
+    error ATG_InvalidSeed();
+    error ATG_RoundFinalized();
+    error ATG_InvalidRoundId();
+    error ATG_InvalidBps();
+    error ATG_FinalizationNotReady();
+    error ATG_NoPrizeToClaim();
+    error ATG_NotWinner();
+    error ATG_PrizeAlreadyClaimed();
+    error ATG_TransferFailed();
+    error ATG_PriorRoundNotFinalized();
+    error ATG_HardCapReached();
+    error ATG_OverflowedConfig();
+    error ATG_InvalidExtension();
+
+    // -------------------------------------------------------------------------
+    // Events (unique)
+    // -------------------------------------------------------------------------
+    event ATG_RolesInstated(
+        bytes32 indexed salt,
+        address indexed boss,
+        address indexed nenek,
+        address indexed treasury
+    );
+    event ATG_PauseToggled(bool paused, address indexed by);
+
+    event ATG_RoundStarted(
+        uint256 indexed roundId,
+        uint64 commitEndsAt,
+        uint64 revealEndsAt,
+        uint256 minDepositWei,
+        uint16 winOddsBps,
+        uint16 feeBps,
+        uint32 maxEntries,
+        bytes32 roundSalt
+    );
+    event ATG_Entered(
+        address indexed player,
+        uint256 indexed roundId,
+        uint256 amountWei,
+        bytes32 seedHash
+    );
+    event ATG_Cancelled(address indexed player, uint256 indexed roundId, uint256 refundWei);
