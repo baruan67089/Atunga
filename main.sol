@@ -466,3 +466,55 @@ contract Atunga {
         uint256 feeWei = (r.totalPotWei * uint256(r.feeBps)) / ATG_BPS;
         uint256 prizeWei = r.totalPotWei - feeWei;
         r.feeWei = feeWei;
+        r.prizeWei = prizeWei;
+
+        address winner = r.bestWinner;
+        uint16 winningRoll = r.bestRollBps;
+        if (winner == address(0)) {
+            winner = ATG_TREASURY;
+            winningRoll = 0;
+        }
+        r.winner = winner;
+
+        if (feeWei != 0) {
+            _treasuryFeesWei += feeWei;
+        }
+
+        emit ATG_RoundFinalized(roundId, winner, prizeWei, feeWei, winningRoll);
+    }
+
+    function claimPrize(uint256 roundId) external nonReentrant whenNotPaused {
+        Round storage r = _rounds[roundId];
+        if (!r.finalized) revert ATG_RoundFinalized();
+        if (r.winner == address(0)) revert ATG_NoPrizeToClaim();
+        if (msg.sender != r.winner) revert ATG_NotWinner();
+        if (r.winnerClaimed) revert ATG_PrizeAlreadyClaimed();
+
+        uint256 amt = r.prizeWei;
+        if (amt == 0) revert ATG_NoPrizeToClaim();
+
+        r.winnerClaimed = true;
+        Ticket storage t = _tickets[roundId][msg.sender];
+        if (t.seedHash != bytes32(0)) {
+            t.claimed = true;
+        }
+
+        (bool ok, ) = msg.sender.call{value: amt}("");
+        if (!ok) revert ATG_TransferFailed();
+
+        emit ATG_PrizeClaimed(msg.sender, roundId, amt);
+    }
+
+    function withdrawTreasuryFees() external nonReentrant onlyTreasury whenNotPaused {
+        uint256 amt = _treasuryFeesWei;
+        if (amt == 0) revert ATG_NoPrizeToClaim();
+        _treasuryFeesWei = 0;
+
+        (bool ok, ) = ATG_TREASURY.call{value: amt}("");
+        if (!ok) revert ATG_TransferFailed();
+
+        emit ATG_TreasuryFeesWithdrawn(msg.sender, amt);
+    }
+
+    // -------------------------------------------------------------------------
+    // Boss / Nenek controls (pause & emergency sweep of rounds)
