@@ -206,3 +206,55 @@ contract Atunga {
         if (msg.sender != ATG_TREASURY) revert ATG_NotTreasury();
         _;
     }
+
+    modifier whenNotPaused() {
+        if (paused) revert ATG_Paused();
+        _;
+    }
+
+    // -------------------------------------------------------------------------
+    // Constructor — no user parameters needed
+    // -------------------------------------------------------------------------
+    constructor() {
+        bytes32 base = keccak256(
+            abi.encodePacked(
+                "ATUNGA.v1",
+                block.chainid,
+                block.timestamp,
+                msg.sender,
+                address(this)
+            )
+        );
+        ATG_DOMAIN = keccak256(abi.encodePacked(base, "ATUNGA.DOMAIN"));
+
+        address boss = address(uint160(uint256(keccak256(abi.encodePacked(base, "ATG_BOSS")))));
+        address nenek = address(uint160(uint256(keccak256(abi.encodePacked(base, "ATG_NENEK")))));
+        address treasury = address(uint160(uint256(keccak256(abi.encodePacked(base, "ATG_TREASURY")))));
+
+        if (nenek == boss) {
+            nenek = address(uint160(uint256(keccak256(abi.encodePacked(base, "ATG_NENEK2")))));
+        }
+        if (treasury == boss || treasury == nenek) {
+            treasury = address(uint160(uint256(keccak256(abi.encodePacked(base, "ATG_TREASURY2")))));
+        }
+
+        ATG_BOSS = boss;
+        ATG_NENEK = nenek;
+        ATG_TREASURY = treasury;
+
+        emit ATG_RolesInstated(base, boss, nenek, treasury);
+
+        paused = false;
+        currentRoundId = ATG_ROUND_ID_START;
+
+        _startRoundInternal();
+    }
+
+    // -------------------------------------------------------------------------
+    // Round lifecycle (no external input required)
+    // -------------------------------------------------------------------------
+    function startNextRound() external whenNotPaused onlyBoss {
+        Round storage prev = _rounds[currentRoundId];
+        if (!prev.finalized) revert ATG_PriorRoundNotFinalized();
+
+        unchecked {
