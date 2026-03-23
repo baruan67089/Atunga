@@ -414,3 +414,55 @@ contract Atunga {
         emit ATG_Cancelled(msg.sender, roundId, refundWei);
     }
 
+    // NOTE: seed is user secret. Reveal must match the commit seedHash.
+    function revealClaw(uint256 roundId, bytes32 seed) external whenNotPaused {
+        Round storage r = _rounds[roundId];
+        if (!r.started) revert ATG_InvalidRoundId();
+        if (block.timestamp < r.commitEndsAt) revert ATG_CommitWindowClosed();
+        if (block.timestamp >= r.revealEndsAt) revert ATG_RevealWindowClosed();
+        if (r.finalized) revert ATG_RoundFinalized();
+
+        Ticket storage t = _tickets[roundId][msg.sender];
+        if (t.seedHash == bytes32(0)) revert ATG_CommitNotFound();
+        if (t.revealed) revert ATG_AlreadyRevealed();
+        if (t.claimed) revert ATG_RoundFinalized();
+
+        if (t.seedHash != keccak256(abi.encodePacked(seed))) revert ATG_InvalidSeed();
+
+        bytes32 entropy = keccak256(
+            abi.encodePacked(
+                seed,
+                msg.sender,
+                roundId,
+                t.seedHash,
+                r.roundSalt
+            )
+        );
+
+        uint16 rollBps = uint16(uint256(entropy) % ATG_BPS);
+        bool candidate = rollBps < r.winOddsBps;
+
+        if (candidate && rollBps < r.bestRollBps) {
+            r.bestRollBps = rollBps;
+            r.bestWinner = msg.sender;
+        }
+
+        t.revealed = true;
+
+        emit ATG_Revealed(msg.sender, roundId, rollBps, candidate);
+    }
+
+    // -------------------------------------------------------------------------
+    // Finalize + claim
+    // -------------------------------------------------------------------------
+    function finalizeRound(uint256 roundId) external whenNotPaused {
+        Round storage r = _rounds[roundId];
+        if (!r.started) revert ATG_InvalidRoundId();
+        if (r.finalized) revert ATG_RoundFinalized();
+        if (block.timestamp < r.revealEndsAt) revert ATG_FinalizationNotReady();
+
+        r.finalized = true;
+
+        uint256 feeWei = (r.totalPotWei * uint256(r.feeBps)) / ATG_BPS;
+        uint256 prizeWei = r.totalPotWei - feeWei;
+        r.feeWei = feeWei;
