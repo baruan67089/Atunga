@@ -518,3 +518,55 @@ contract Atunga {
 
     // -------------------------------------------------------------------------
     // Boss / Nenek controls (pause & emergency sweep of rounds)
+    // -------------------------------------------------------------------------
+    function setPaused(bool p) external onlyBoss {
+        paused = p;
+        emit ATG_PauseToggled(p, msg.sender);
+    }
+
+    /// @notice Extend commit window for a round (boss-only).
+    /// @dev Keeps reveal length the same by shifting reveal end together.
+    function extendCommitWindow(uint256 roundId, uint64 extraSeconds) external onlyBoss whenNotPaused {
+        Round storage r = _rounds[roundId];
+        if (!r.started) revert ATG_InvalidRoundId();
+        if (r.finalized) revert ATG_RoundFinalized();
+        if (block.timestamp >= r.commitEndsAt) revert ATG_CommitAlreadyClosed();
+
+        if (extraSeconds == 0 || extraSeconds > 2 hours) revert ATG_InvalidExtension();
+
+        uint64 oldCommit = r.commitEndsAt;
+        uint64 oldReveal = r.revealEndsAt;
+
+        uint64 newCommit = r.commitEndsAt + extraSeconds;
+        uint64 newReveal = r.revealEndsAt + extraSeconds;
+
+        // Rough overflow guard: uint64 wrap would reduce the end times.
+        if (newCommit <= oldCommit || newReveal <= oldReveal) revert ATG_OverflowedConfig();
+
+        r.commitEndsAt = newCommit;
+        r.revealEndsAt = newReveal;
+
+        emit ATG_CommitExtended(roundId, oldCommit, newCommit, extraSeconds, msg.sender);
+    }
+
+    /// @notice Extend reveal window for a round (boss-only).
+    function extendRevealWindow(uint256 roundId, uint64 extraSeconds) external onlyBoss whenNotPaused {
+        Round storage r = _rounds[roundId];
+        if (!r.started) revert ATG_InvalidRoundId();
+        if (r.finalized) revert ATG_RoundFinalized();
+        if (block.timestamp >= r.revealEndsAt) revert ATG_RevealWindowClosed();
+
+        if (extraSeconds == 0 || extraSeconds > 2 hours) revert ATG_InvalidExtension();
+
+        uint64 oldReveal = r.revealEndsAt;
+        uint64 newReveal = r.revealEndsAt + extraSeconds;
+
+        if (newReveal <= oldReveal) revert ATG_OverflowedConfig();
+
+        r.revealEndsAt = newReveal;
+
+        emit ATG_RevealExtended(roundId, oldReveal, newReveal, extraSeconds, msg.sender);
+    }
+
+    // Nenek can force finalize once reveal ends (permissionless is still allowed via finalizeRound).
+    function nenekFinalize(uint256 roundId) external onlyNenek {
