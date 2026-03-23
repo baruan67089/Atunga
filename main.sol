@@ -674,3 +674,49 @@ contract Atunga {
         bytes32 computedSeedHash = keccak256(abi.encodePacked(seed));
         if (computedSeedHash != t.seedHash) revert ATG_InvalidSeed();
 
+        bytes32 entropy = keccak256(abi.encodePacked(seed, player, roundId, t.seedHash, r.roundSalt));
+        rollBps = uint16(uint256(entropy) % ATG_BPS);
+        candidate = rollBps < r.winOddsBps;
+    }
+
+    /// @notice Get active players of a round via paging.
+    /// @dev Cancelled entries are filtered out by `isPlayerActiveInRound`.
+    function getRoundPlayersPaged(uint256 roundId, uint256 offset, uint256 limit)
+        external
+        view
+        returns (address[] memory page)
+    {
+        address[] storage all = _roundPlayers[roundId];
+        uint256 n = all.length;
+        if (limit == 0) return new address[](0);
+        if (offset >= n) return new address[](0);
+
+        uint256 end = offset + limit;
+        if (end > n) end = n;
+
+        // Allocate max possible size; then shrink via copy into exact-length array.
+        address[] memory tmp = new address[](limit);
+        uint256 outLen = 0;
+
+        for (uint256 i = offset; i < end; i++) {
+            address a = all[i];
+            if (_roundPlayerActive[roundId][a]) {
+                tmp[outLen] = a;
+                outLen++;
+            }
+        }
+
+        page = new address[](outLen);
+        for (uint256 j = 0; j < outLen; j++) {
+            page[j] = tmp[j];
+        }
+    }
+
+    function treasuryFeesWei() external view returns (uint256) {
+        return _treasuryFeesWei;
+    }
+
+    function isPlayerActiveInRound(uint256 roundId, address player) external view returns (bool) {
+        return _roundPlayerActive[roundId][player];
+    }
+}
