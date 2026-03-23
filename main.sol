@@ -622,3 +622,55 @@ contract Atunga {
             r.totalPotWei,
             r.bestWinner,
             r.bestRollBps,
+            r.winner,
+            r.prizeWei,
+            r.feeWei
+        );
+    }
+
+    function getMyTicket(uint256 roundId, address player)
+        external
+        view
+        returns (
+            bytes32 seedHash,
+            uint256 amountWei,
+            bool revealed,
+            bool claimed
+        )
+    {
+        Ticket storage t = _tickets[roundId][player];
+        return (t.seedHash, t.amountWei, t.revealed, t.claimed);
+    }
+
+    function roles() external view returns (address boss, address nenek, address treasury) {
+        return (ATG_BOSS, ATG_NENEK, ATG_TREASURY);
+    }
+
+    /// @notice Expose the domain hash used for per-round salt derivation.
+    /// @dev Useful for off-chain simulation tools.
+    function atgDomain() external view returns (bytes32) {
+        return ATG_DOMAIN;
+    }
+
+    /// @notice Compute commit hash for a given seed (bytes32).
+    function seedHashOf(bytes32 seed) external pure returns (bytes32) {
+        // For bytes32: keccak256(abi.encodePacked(seed)) equals keccak256(seed bytes).
+        return keccak256(abi.encodePacked(seed));
+    }
+
+    /// @notice Preview roll + candidate outcome for a given committed player+seed.
+    /// @dev Reverts if player has not committed, or if seed does not match commit seedHash.
+    function previewRevealOutcome(uint256 roundId, address player, bytes32 seed)
+        external
+        view
+        returns (uint16 rollBps, bool candidate)
+    {
+        Round storage r = _rounds[roundId];
+        if (!r.started) revert ATG_InvalidRoundId();
+
+        Ticket storage t = _tickets[roundId][player];
+        if (t.seedHash == bytes32(0)) revert ATG_CommitNotFound();
+
+        bytes32 computedSeedHash = keccak256(abi.encodePacked(seed));
+        if (computedSeedHash != t.seedHash) revert ATG_InvalidSeed();
+
