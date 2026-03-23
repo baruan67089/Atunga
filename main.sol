@@ -102,3 +102,55 @@ contract Atunga {
         bytes32 seedHash
     );
     event ATG_Cancelled(address indexed player, uint256 indexed roundId, uint256 refundWei);
+    event ATG_Revealed(
+        address indexed player,
+        uint256 indexed roundId,
+        uint16 rollBps,
+        bool candidate
+    );
+    event ATG_RoundFinalized(
+        uint256 indexed roundId,
+        address winner,
+        uint256 prizeWei,
+        uint256 feeWei,
+        uint16 winningRollBps
+    );
+    event ATG_PrizeClaimed(
+        address indexed winner,
+        uint256 indexed roundId,
+        uint256 amountWei
+    );
+    event ATG_TreasuryFeesWithdrawn(address indexed by, uint256 amountWei);
+
+    event ATG_CommitExtended(
+        uint256 indexed roundId,
+        uint64 oldCommitEndsAt,
+        uint64 newCommitEndsAt,
+        uint64 bySeconds,
+        address indexed by
+    );
+    event ATG_RevealExtended(
+        uint256 indexed roundId,
+        uint64 oldRevealEndsAt,
+        uint64 newRevealEndsAt,
+        uint64 bySeconds,
+        address indexed by
+    );
+
+    // -------------------------------------------------------------------------
+    // Global pause flag
+    // -------------------------------------------------------------------------
+    bool public paused;
+
+    // -------------------------------------------------------------------------
+    // Round storage
+    // -------------------------------------------------------------------------
+    struct Ticket {
+        bytes32 seedHash;
+        uint256 amountWei;
+        bool revealed;
+        bool claimed;
+    }
+
+    struct Round {
+        uint64 commitEndsAt;
