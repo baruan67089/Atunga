@@ -362,3 +362,55 @@ contract Atunga {
 
         Ticket storage t = _tickets[currentRoundId][msg.sender];
         if (t.seedHash != bytes32(0)) revert ATG_AlreadyCommitted();
+        if (msg.value < r.minDepositWei) revert ATG_InvalidDeposit();
+
+        if (!_roundPlayerActive[currentRoundId][msg.sender]) {
+            _roundPlayerActive[currentRoundId][msg.sender] = true;
+            _roundPlayers[currentRoundId].push(msg.sender);
+        }
+
+        r.entryCount += 1;
+        r.totalPotWei += msg.value;
+
+        t.seedHash = seedHash;
+        t.amountWei = msg.value;
+        t.revealed = false;
+        t.claimed = false;
+
+        emit ATG_Entered(msg.sender, currentRoundId, msg.value, seedHash);
+    }
+
+    /// @notice Cancel entry and refund during commit window (before reveal starts).
+    /// @dev Keeps fairness by only allowing cancellation while `block.timestamp < commitEndsAt`.
+    function cancelEntry(uint256 roundId) external nonReentrant whenNotPaused {
+        Round storage r = _rounds[roundId];
+        if (!r.started) revert ATG_InvalidRoundId();
+        if (block.timestamp >= r.commitEndsAt) revert ATG_CommitWindowClosed();
+        if (r.finalized) revert ATG_RoundFinalized();
+
+        Ticket storage t = _tickets[roundId][msg.sender];
+        if (t.seedHash == bytes32(0)) revert ATG_CommitNotFound();
+        if (t.revealed) revert ATG_AlreadyRevealed();
+        if (t.claimed) revert ATG_PrizeAlreadyClaimed();
+
+        uint256 refundWei = t.amountWei;
+        if (refundWei == 0) revert ATG_InvalidDeposit();
+
+        // Effects
+        t.seedHash = bytes32(0);
+        t.amountWei = 0;
+        t.revealed = false;
+        t.claimed = false;
+        _roundPlayerActive[roundId][msg.sender] = false;
+
+        // Accounting updates
+        r.entryCount -= 1;
+        r.totalPotWei -= refundWei;
+
+        // Interactions
+        (bool ok, ) = msg.sender.call{value: refundWei}("");
+        if (!ok) revert ATG_TransferFailed();
+
+        emit ATG_Cancelled(msg.sender, roundId, refundWei);
+    }
+
