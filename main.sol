@@ -570,3 +570,55 @@ contract Atunga {
 
     // Nenek can force finalize once reveal ends (permissionless is still allowed via finalizeRound).
     function nenekFinalize(uint256 roundId) external onlyNenek {
+        // This funnels into finalizeRound to keep accounting identical.
+        // Reentrancy not required since finalizeRound makes no external calls.
+        if (_rounds[roundId].started && !_rounds[roundId].finalized && block.timestamp >= _rounds[roundId].revealEndsAt) {
+            // no-op, call the internal logic by using external finalizeRound
+            // solhint-disable-next-line avoid-low-level-calls
+            this.finalizeRound(roundId);
+        } else {
+            // revert with a generic error to avoid leaking timing logic
+            revert ATG_FinalizationNotReady();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Views — handy for web UI + AchanAX simulator
+    // -------------------------------------------------------------------------
+    function getRoundView(uint256 roundId)
+        external
+        view
+        returns (
+            bool started,
+            bool finalized,
+            uint64 commitEndsAt,
+            uint64 revealEndsAt,
+            uint256 minDepositWei,
+            uint16 winOddsBps,
+            uint16 feeBps,
+            uint32 maxEntries,
+            bytes32 roundSalt,
+            uint32 entryCount,
+            uint256 totalPotWei,
+            address bestWinner,
+            uint16 bestRollBps,
+            address winner,
+            uint256 prizeWei,
+            uint256 feeWei
+        )
+    {
+        Round storage r = _rounds[roundId];
+        return (
+            r.started,
+            r.finalized,
+            r.commitEndsAt,
+            r.revealEndsAt,
+            r.minDepositWei,
+            r.winOddsBps,
+            r.feeBps,
+            r.maxEntries,
+            r.roundSalt,
+            r.entryCount,
+            r.totalPotWei,
+            r.bestWinner,
+            r.bestRollBps,
