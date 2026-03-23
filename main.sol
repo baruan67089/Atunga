@@ -258,3 +258,55 @@ contract Atunga {
         if (!prev.finalized) revert ATG_PriorRoundNotFinalized();
 
         unchecked {
+            currentRoundId += 1;
+        }
+        _startRoundInternal();
+    }
+
+    function _startRoundInternal() private {
+        Round storage r = _rounds[currentRoundId];
+
+        // “Random” but deterministic-per-deploy: derived from block values at call time.
+        // No reliance on external oracles.
+        bytes32 salt = keccak256(abi.encodePacked(ATG_DOMAIN, currentRoundId, blockhash(block.number - 1), block.timestamp));
+
+        uint64 commitLen = _boundU64(uint64(uint256(keccak256(abi.encodePacked(salt, "COMMIT_LEN")))), ATG_MIN_COMMIT_SECS, ATG_MAX_COMMIT_SECS);
+        uint64 revealLen = _boundU64(uint64(uint256(keccak256(abi.encodePacked(salt, "REVEAL_LEN")))), ATG_MIN_REVEAL_SECS, ATG_MAX_REVEAL_SECS);
+
+        uint256 minDepositWei = _boundU256(
+            uint256(keccak256(abi.encodePacked(salt, "MIN_DEPOSIT"))),
+            ATG_MIN_DEPOSIT_WEI,
+            5 ether
+        );
+
+        uint16 feeBps = _boundU16(uint16(uint256(keccak256(abi.encodePacked(salt, "FEE_BPS")) % ATG_MAX_FEE_BPS)));
+        uint16 winOddsBps = _boundU16(uint16(uint256(keccak256(abi.encodePacked(salt, "WIN_ODDS")) % ATG_MAX_WIN_ODDS_BPS)));
+        if (winOddsBps < ATG_MIN_WIN_ODDS_BPS) winOddsBps = uint16(ATG_MIN_WIN_ODDS_BPS);
+
+        uint32 maxEntries = _boundU32(uint32(uint256(keccak256(abi.encodePacked(salt, "MAX_ENTRIES")) % 400)) + 16, 16, ATG_HARD_ENTRY_CAP);
+
+        uint64 commitEndsAt = uint64(block.timestamp + commitLen);
+        uint64 revealEndsAt = uint64(commitEndsAt + revealLen);
+
+        // Sanity: ensure bps are in range.
+        if (feeBps == 0 || feeBps > ATG_MAX_FEE_BPS) revert ATG_InvalidBps();
+        if (winOddsBps == 0 || winOddsBps > ATG_BPS) revert ATG_InvalidBps();
+        if (minDepositWei < ATG_MIN_DEPOSIT_WEI) revert ATG_InvalidDeposit();
+
+        r.commitEndsAt = commitEndsAt;
+        r.revealEndsAt = revealEndsAt;
+        r.minDepositWei = minDepositWei;
+        r.winOddsBps = winOddsBps;
+        r.feeBps = feeBps;
+        r.maxEntries = maxEntries;
+        r.roundSalt = salt;
+
+        r.started = true;
+        r.finalized = false;
+        r.entryCount = 0;
+        r.totalPotWei = 0;
+        r.bestWinner = address(0);
+        r.bestRollBps = uint16(ATG_BPS);
+
+        r.winner = address(0);
+        r.prizeWei = 0;
