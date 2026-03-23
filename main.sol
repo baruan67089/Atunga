@@ -310,3 +310,55 @@ contract Atunga {
 
         r.winner = address(0);
         r.prizeWei = 0;
+        r.feeWei = 0;
+        r.winnerClaimed = false;
+
+        emit ATG_RoundStarted(
+            currentRoundId,
+            commitEndsAt,
+            revealEndsAt,
+            minDepositWei,
+            winOddsBps,
+            feeBps,
+            maxEntries,
+            salt
+        );
+    }
+
+    function _boundU64(uint64 v, uint64 minV, uint64 maxV) private pure returns (uint64) {
+        if (v < minV) return minV;
+        if (v > maxV) return maxV;
+        return v;
+    }
+
+    function _boundU32(uint32 v, uint32 minV, uint32 maxV) private pure returns (uint32) {
+        if (v < minV) return minV;
+        if (v > maxV) return maxV;
+        return v;
+    }
+
+    function _boundU16(uint16 v) private pure returns (uint16) {
+        // v already reduced, but keep it safe-ish.
+        if (v == 0) return 1;
+        if (v > ATG_BPS) return uint16(ATG_BPS);
+        return v;
+    }
+
+    function _boundU256(uint256 v, uint256 minV, uint256 maxV) private pure returns (uint256) {
+        if (v < minV) return minV;
+        if (v > maxV) return maxV;
+        return v;
+    }
+
+    // -------------------------------------------------------------------------
+    // Commit / reveal
+    // -------------------------------------------------------------------------
+    function enterClaw(bytes32 seedHash) external payable whenNotPaused {
+        Round storage r = _rounds[currentRoundId];
+        if (!r.started) revert ATG_AlreadyStarted();
+        if (block.timestamp >= r.commitEndsAt) revert ATG_CommitWindowClosed();
+        if (seedHash == bytes32(0)) revert ATG_InvalidSeedHash();
+        if (r.entryCount >= r.maxEntries) revert ATG_HardCapReached();
+
+        Ticket storage t = _tickets[currentRoundId][msg.sender];
+        if (t.seedHash != bytes32(0)) revert ATG_AlreadyCommitted();
